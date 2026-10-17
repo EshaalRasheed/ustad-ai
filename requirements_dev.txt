@@ -1,0 +1,4 @@
+# Only needed on your PC for voice_test.py (microphone recording)
+-r requirements.txt
+sounddevice
+soundfile

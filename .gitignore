@@ -1,0 +1,7 @@
+# Never upload secrets, the virtual environment, or cache files
+.env
+.venv/
+__pycache__/
+
+# Textbook PDFs can be large and have usage terms; don't upload them
+data/textbooks/*.pdf

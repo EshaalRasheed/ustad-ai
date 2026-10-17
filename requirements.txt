@@ -1,0 +1,11 @@
+# AI model (Gemini) and settings
+google-genai
+python-dotenv
+
+# Web server
+fastapi
+uvicorn
+python-multipart
+
+# Urdu text-to-speech
+edge-tts

@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ur" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>استاد – آپ کا اپنا ٹیچر</title>
+  <!-- Nastaliq font so Urdu looks like a real Urdu book -->
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #fff8ec; --card: #ffffff; --text: #2b2b2b; --muted: #6b6b6b;
+      --primary: #1f8a70; --primary-dark: #146b56; --recording: #e4572e; --border: #f0e2c8;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1b1f1e; --card: #262c2a; --text: #f2f2f2; --muted: #b5b5b5;
+        --primary: #3fbf98; --primary-dark: #2e9e7c; --recording: #ff7a59; --border: #36403d;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+      font-family: "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", serif;
+      display: flex; flex-direction: column; align-items: center; padding: 24px 16px 48px;
+    }
+    h1 { font-size: 2.2rem; margin: 8px 0 0; color: var(--primary); }
+    .subtitle { color: var(--muted); margin: 0 0 24px; font-size: 1.05rem; line-height: 2.4; text-align: center; }
+
+    /* The big round microphone button */
+    #mic {
+      width: 170px; height: 170px; border-radius: 50%; border: none; cursor: pointer;
+      background: var(--primary); color: #fff; font-size: 64px;
+      box-shadow: 0 10px 30px rgba(31, 138, 112, 0.35); transition: transform 0.15s, background 0.2s;
+    }
+    #mic:active { transform: scale(0.96); }
+    #mic.recording { background: var(--recording); animation: pulse 1.2s infinite; }
+    #mic:disabled { opacity: 0.6; cursor: wait; }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(228, 87, 46, 0.6); }
+      100% { box-shadow: 0 0 0 28px rgba(228, 87, 46, 0); }
+    }
+    #status { margin: 18px 0; font-size: 1.25rem; min-height: 2.6em; line-height: 2.4; text-align: center; }
+
+    .card {
+      width: 100%; max-width: 640px; background: var(--card); border: 2px solid var(--border);
+      border-radius: 20px; padding: 18px 22px; margin-top: 14px; line-height: 2.5; font-size: 1.2rem;
+    }
+    .label { color: var(--muted); font-size: 0.95rem; }
+    .hidden { display: none !important; }   /* !important so it always wins over other display rules */
+    .tag { display: inline-block; background: var(--border); border-radius: 999px; padding: 0 12px; font-size: 0.9rem; }
+    .check { color: var(--primary-dark); font-weight: 700; }
+    button.secondary {
+      font-family: inherit; font-size: 1rem; border: 2px solid var(--primary); background: transparent;
+      color: var(--primary); border-radius: 999px; padding: 4px 18px; cursor: pointer; margin-top: 6px;
+    }
+
+    /* Typing fallback for devices without a microphone */
+    form { display: flex; gap: 8px; width: 100%; max-width: 640px; margin-top: 28px; }
+    input[type="text"] {
+      flex: 1; font-family: inherit; font-size: 1.05rem; padding: 6px 14px;
+      border-radius: 14px; border: 2px solid var(--border); background: var(--card); color: var(--text);
+    }
+    form button {
+      font-family: inherit; font-size: 1rem; border: none; border-radius: 14px;
+      background: var(--primary); color: #fff; padding: 0 18px; cursor: pointer;
+    }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .correct { color: var(--primary-dark); font-weight: 700; }
+    .wrong { color: var(--recording); font-weight: 700; }
+
+    /* Picture feature */
+    .tools { display: flex; gap: 8px; justify-content: center; margin-top: -4px; }
+    label.secondary {
+      display: inline-block; font-size: 1rem; border: 2px solid var(--primary); color: var(--primary);
+      border-radius: 999px; padding: 4px 18px; cursor: pointer;
+    }
+    .photo { display: block; max-width: 100%; max-height: 260px; border-radius: 14px; margin: 6px auto; }
+
+    /* Quiz "answer by voice" button turns red while recording */
+    #answerMic.recording { background: var(--recording); border-color: var(--recording); color: #fff; }
+    footer { margin-top: 32px; color: var(--muted); font-size: 0.85rem; text-align: center; line-height: 2.2; }
+  </style>
+</head>
+<body>
+  <h1>استاد</h1>
+  <p class="subtitle">بٹن دبائیں، اپنا سوال بولیں، پھر دوبارہ دبائیں۔<br />میں آپ کو اردو میں سمجھاؤں گا!</p>
+
+  <!-- Press once to start recording, press again to stop and send -->
+  <button id="mic" aria-label="سوال ریکارڈ کریں">🎤</button>
+  <div id="status">بولنے کے لیے بٹن دبائیں</div>
+
+  <!-- Attach a picture: on phones this offers the camera or the gallery -->
+  <div class="tools">
+    <label for="photoInput" class="secondary">📷 تصویر لگائیں</label>
+    <input id="photoInput" type="file" accept="image/*" hidden />
+  </div>
+
+  <!-- Preview of the attached picture, waiting for a question -->
+  <div id="photoCard" class="card hidden">
+    <img id="photoPreview" class="photo" alt="آپ کی تصویر" />
+    <div class="label">اس تصویر کے بارے میں سوال بولیں یا لکھیں، یا سیدھا "سمجھائیں" دبائیں۔</div>
+    <div class="actions">
+      <button id="explainPhoto" class="secondary">✨ سمجھائیں</button>
+      <button id="removePhoto" class="secondary">✖ تصویر ہٹائیں</button>
+    </div>
+  </div>
+
+  <!-- What Ustad heard (and the picture, if any) -->
+  <div id="questionCard" class="card hidden">
+    <div class="label">آپ نے پوچھا:</div>
+    <img id="questionPhoto" class="photo hidden" alt="آپ کی بھیجی ہوئی تصویر" />
+    <div id="questionText"></div>
+  </div>
+
+  <!-- Ustad's answer -->
+  <div id="answerCard" class="card hidden">
+    <div class="label">استاد کا جواب: <span id="subjectTag" class="tag"></span></div>
+    <div id="answerText"></div>
+    <p id="checkText" class="check"></p>
+    <button id="replay" class="secondary">🔊 دوبارہ سنیں</button>
+  </div>
+
+  <!-- Quiz turn: the learner answers by voice or typing, or skips -->
+  <div id="quizCard" class="card hidden">
+    <div>🎯 اب آپ کی باری! جواب بول کر دیں یا لکھ کر۔</div>
+    <div class="actions">
+      <button id="answerMic" class="secondary">🎤 جواب بولیں</button>
+      <button id="answerType" class="secondary">⌨️ جواب لکھیں</button>
+      <button id="skip" class="secondary">⏭ جواب نہیں دینا، اگلا سوال</button>
+    </div>
+  </div>
+
+  <!-- Ustad's feedback on the learner's answer -->
+  <div id="feedbackCard" class="card hidden">
+    <div class="label">آپ کا جواب: <span id="childAnswer"></span></div>
+    <div id="feedbackText"></div>
+  </div>
+
+  <!-- Typed question or answer -->
+  <form id="textForm">
+    <input id="textInput" type="text" placeholder="یا یہاں لکھ کر پوچھیں…" maxlength="500" />
+    <button type="submit">پوچھیں</button>
+  </form>
+
+  <footer>استاد ایک AI ٹیچر ہے اور کبھی غلطی بھی کر سکتا ہے۔ کوئی ذاتی معلومات نہ بتائیں۔</footer>
+
+  <script>
+    // ---- Page elements ----
+    const $ = (id) => document.getElementById(id);
+    const micBtn = $("mic");
+    const textInput = $("textInput");
+    const player = new Audio();          // plays Ustad's voice
+    let mediaRecorder = null;             // records the microphone
+    let chunks = [];                      // pieces of the recording
+
+    // When Ustad has asked a check question, `quiz` holds it and the
+    // mic/text box send the learner's ANSWER instead of a new question.
+    let quiz = null;                      // { question, expected } or null
+
+    // A picture the learner attached, waiting to be sent with the next question
+    let photo = null;                     // a JPEG Blob, or null
+
+    const SUBJECTS = {                    // subject names shown in Urdu (keys match tutor.py)
+      maths: "ریاضی", english: "انگریزی", urdu: "اردو", islamiat: "اسلامیات",
+      computer: "کمپیوٹر", science: "سائنس", physics: "فزکس",
+      chemistry: "کیمسٹری", biology: "حیاتیات", social_studies: "معاشرتی علوم",
+      pakistan_studies: "مطالعہ پاکستان", history: "تاریخ", geography: "جغرافیہ",
+      economics: "معاشیات", civics: "شہریت", accounting: "اکاؤنٹنگ",
+      business: "کاروبار", health: "صحت", environment: "ماحولیات",
+      arts: "فنون", general: "عام معلومات",
+    };
+
+    function setStatus(text) { $("status").textContent = text; }
+    function show(id, visible) { $(id).classList.toggle("hidden", !visible); }
+
+    function playAudio(base64) {
+      player.src = "data:audio/mpeg;base64," + base64;
+      player.play();
+    }
+
+    // Switch between "ask a new question" mode and "answer the quiz" mode
+    function setQuiz(newQuiz) {
+      quiz = newQuiz;
+      show("quizCard", Boolean(quiz));
+      textInput.placeholder = quiz ? "یہاں اپنا جواب لکھیں…" : "یا یہاں لکھ کر پوچھیں…";
+      setStatus(quiz ? "جواب بولنے کے لیے بٹن دبائیں 🎯" : "نیا سوال پوچھنے کے لیے بٹن دبائیں");
+    }
+
+    // ---- Pictures: shrink big phone photos before sending ----
+    // A 4000px phone photo can be 5+ MB; 1280px is plenty for reading text and
+    // diagrams, and it uploads much faster on slow mobile internet.
+    async function shrinkImage(file, maxSize = 1280) {
+      try {
+        const bitmap = await createImageBitmap(file);
+        const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(bitmap.width * scale);
+        canvas.height = Math.round(bitmap.height * scale);
+        canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        return await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+      } catch (err) {
+        return file;                      // browser couldn't read it (e.g. HEIC): send as-is
+      }
+    }
+
+    $("photoInput").addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      e.target.value = "";                // allow choosing the same file again later
+      if (!file) return;
+      photo = await shrinkImage(file);
+      $("photoPreview").src = URL.createObjectURL(photo);
+      show("photoCard", true);
+      setQuiz(null);                      // a new picture means a new question
+      setStatus("اب تصویر کے بارے میں سوال پوچھیں 📷");
+    });
+
+    function clearPhoto() {
+      photo = null;
+      show("photoCard", false);
+    }
+    $("removePhoto").addEventListener("click", () => { clearPhoto(); setQuiz(null); });
+
+    // Send the picture with an optional typed text or recorded audio question
+    async function askWithPhoto({ text = "", audio = null } = {}) {
+      const form = new FormData();
+      form.append("image", photo, "photo.jpg");
+      form.append("question", text);
+      if (audio) form.append("audio", audio, "recording.wav");
+      const sentPhoto = photo;
+      const data = await callServer("/api/ask-image", { method: "POST", body: form });
+      if (!data) return false;
+      showAnswer(data, sentPhoto);
+      if (!data.not_heard) clearPhoto();  // picture used: remove it from the waiting area
+      return true;
+    }
+    $("explainPhoto").addEventListener("click", () => askWithPhoto());
+
+    // ---- Recording: first press starts, second press stops and sends ----
+    // Both the big mic and the quiz card's "answer by voice" button use this
+    async function toggleRecording() {
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();             // triggers the "stop" handler below
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        chunks = [];
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+        mediaRecorder.onstop = async () => {
+          stream.getTracks().forEach((t) => t.stop());  // switch the microphone off
+          micBtn.classList.remove("recording");
+          $("answerMic").classList.remove("recording");
+          $("answerMic").textContent = "🎤 جواب بولیں";
+          const recorded = new Blob(chunks, { type: mediaRecorder.mimeType });
+          await sendRecording(recorded);
+        };
+        player.pause();                   // stop Ustad talking while the learner speaks
+        mediaRecorder.start();
+        micBtn.classList.add("recording");
+        if (quiz) {                       // answering the quiz: show it on the small button too
+          $("answerMic").classList.add("recording");
+          $("answerMic").textContent = "⏹ بس، بھیج دیں";
+        }
+        setStatus("میں سن رہا ہوں… بولنے کے بعد بٹن دوبارہ دبائیں");
+      } catch (err) {
+        setStatus("مائیکروفون نہیں ملا۔ نیچے لکھ کر استعمال کریں۔");
+      }
+    }
+
+    micBtn.addEventListener("click", toggleRecording);
+    $("answerMic").addEventListener("click", toggleRecording);   // answer the quiz by voice
+
+    // "Answer by typing": jump to the text box, ready to type
+    $("answerType").addEventListener("click", () => {
+      textInput.focus();
+      textInput.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+
+    // ---- Convert the browser recording into a 16 kHz mono WAV file ----
+    // Browsers record in different formats (webm, ogg, mp4); WAV works everywhere.
+    async function toWav(blob) {
+      const arrayBuffer = await blob.arrayBuffer();
+      const decoded = await new AudioContext().decodeAudioData(arrayBuffer);
+      const targetRate = 16000;
+      const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * targetRate), targetRate);
+      const source = offline.createBufferSource();
+      source.buffer = decoded;
+      source.connect(offline.destination);
+      source.start();
+      const rendered = await offline.startRendering();   // resampled, mono audio
+      return encodeWav(rendered.getChannelData(0), targetRate);
+    }
+
+    // Build a standard 16-bit PCM WAV file from raw audio samples
+    function encodeWav(samples, sampleRate) {
+      const buffer = new ArrayBuffer(44 + samples.length * 2);
+      const view = new DataView(buffer);
+      const write = (offset, text) => [...text].forEach((c, i) => view.setUint8(offset + i, c.charCodeAt(0)));
+      write(0, "RIFF"); view.setUint32(4, 36 + samples.length * 2, true); write(8, "WAVE");
+      write(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true);   // PCM
+      view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true);              // mono
+      view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+      write(36, "data"); view.setUint32(40, samples.length * 2, true);
+      samples.forEach((s, i) => {
+        const clamped = Math.max(-1, Math.min(1, s));
+        view.setInt16(44 + i * 2, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
+      });
+      return new Blob([view], { type: "audio/wav" });
+    }
+
+    // ---- Talk to the server (shared by every request) ----
+    async function callServer(url, options) {
+      micBtn.disabled = true;
+      $("answerMic").disabled = true;
+      setStatus("استاد سوچ رہا ہے… 🤔");
+      try {
+        const res = await fetch(url, options);
+        if (res.status === 429) {          // free AI quota used up: show the server's Urdu message
+          setStatus((await res.json()).detail);
+          return null;
+        }
+        if (!res.ok) throw new Error(await res.text());
+        return await res.json();
+      } catch (err) {
+        console.error(err);
+        setStatus("کچھ مسئلہ ہو گیا۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔");
+        return null;
+      } finally {
+        micBtn.disabled = false;
+        $("answerMic").disabled = false;
+      }
+    }
+
+    // ---- Voice: a new question, a question about a picture, or a quiz answer ----
+    async function sendRecording(recorded) {
+      const wav = await toWav(recorded);
+      if (photo && !quiz) {               // a spoken question about the attached picture
+        await askWithPhoto({ audio: wav });
+        return;
+      }
+      const form = new FormData();
+      form.append("audio", wav, "recording.wav");
+      if (quiz) {
+        form.append("check_question", quiz.question);
+        form.append("expected_answer", quiz.expected);
+        const data = await callServer("/api/check-audio", { method: "POST", body: form });
+        if (data) showFeedback(data);
+      } else {
+        const data = await callServer("/api/ask-audio", { method: "POST", body: form });
+        if (data) showAnswer(data);
+      }
+    }
+
+    // ---- Text box: a new question, a question about a picture, or a quiz answer ----
+    $("textForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const text = textInput.value.trim();
+      if (!text) return;
+      if (photo && !quiz) {               // a typed question about the attached picture
+        if (await askWithPhoto({ text })) textInput.value = "";
+        return;
+      }
+      const json = (body) => ({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = quiz
+        ? await callServer("/api/check-text", json({ check_question: quiz.question, expected_answer: quiz.expected, answer: text }))
+        : await callServer("/api/ask-text", json({ question: text }));
+      if (!data) return;
+      textInput.value = "";
+      quiz ? showFeedback(data) : showAnswer(data);
+    });
+
+    // ---- Show Ustad's explanation, then start the quiz turn ----
+    function showAnswer(data, sentPhoto = null) {
+      playAudio(data.audio_base64);
+      if (data.not_heard) {               // nothing understood: ask again
+        setStatus(data.explanation_urdu);
+        return;
+      }
+      show("feedbackCard", false);        // clear old feedback
+      show("questionCard", Boolean(data.question || sentPhoto));
+      $("questionText").textContent = data.question;
+      // Show the picture the question was about (if any)
+      show("questionPhoto", Boolean(sentPhoto));
+      if (sentPhoto) $("questionPhoto").src = URL.createObjectURL(sentPhoto);
+      show("answerCard", true);
+      $("answerText").textContent = data.explanation_urdu;
+      $("checkText").textContent = data.check_question_urdu || "";
+      $("subjectTag").textContent = SUBJECTS[data.subject] || "";
+
+      // If Ustad asked a check question, it's now the learner's turn to answer
+      const hasQuiz = data.check_question_urdu && data.expected_answer_urdu;
+      setQuiz(hasQuiz ? { question: data.check_question_urdu, expected: data.expected_answer_urdu } : null);
+    }
+
+    // ---- Show whether the learner's answer was right ----
+    function showFeedback(data) {
+      playAudio(data.audio_base64);
+      if (data.not_heard) {               // nothing understood: stay in quiz mode
+        setStatus(data.feedback_urdu);
+        return;
+      }
+      $("childAnswer").textContent = data.child_answer;
+      const feedback = $("feedbackText");
+      feedback.textContent = (data.is_correct ? "✅ " : "💡 ") + data.feedback_urdu;
+      feedback.className = data.is_correct ? "correct" : "wrong";
+      show("feedbackCard", true);
+      setQuiz(null);                      // quiz finished: back to asking questions
+    }
+
+    // ---- Skip: the learner doesn't want to answer, move to a new question ----
+    $("skip").addEventListener("click", () => {
+      player.pause();
+      show("feedbackCard", false);
+      setQuiz(null);
+    });
+
+    // ---- Replay Ustad's last spoken message ----
+    $("replay").addEventListener("click", () => {
+      player.currentTime = 0;
+      player.play();
+    });
+  </script>
+</body>
+</html>
