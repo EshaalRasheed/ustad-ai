@@ -1,5 +1,6 @@
 """Ustad AI web server: receives the learner's voice, text, or picture and returns a spoken Urdu answer."""
 import base64
+import os
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
@@ -104,7 +105,7 @@ async def build_feedback(check_question: str, expected_answer: str, child_answer
 
 # ---------- Endpoints ----------
 
-@app.get("/health")
+@app.get("/api/health")
 def health():
     """Simple check used by hosting platforms to see if the app is alive."""
     return {"status": "ok"}
@@ -164,6 +165,8 @@ async def check_text(body: TextAnswer):
     return await build_feedback(body.check_question, body.expected_answer, body.answer.strip())
 
 
-# Serve the web app (static/index.html) at the main address "/".
-# This line must come last so it doesn't hide the /api routes above.
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+# Serve the web page (public/index.html) at "/" when running on your PC.
+# On Vercel, files in public/ are served directly by Vercel's CDN instead,
+# so we only mount the folder if it exists. Must come last so it doesn't hide /api routes.
+if os.path.isdir("public"):
+    app.mount("/", StaticFiles(directory="public", html=True), name="public")
